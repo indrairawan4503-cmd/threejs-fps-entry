@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>EMBERLINE — Dustline Yard</title>
+<style>
+  :root { --amber: #ffb347; --ember: #ff7a1a; --teal: #7fe3d0; --red: #ff4a3a; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #1a1210;
+    font-family: 'Segoe UI', system-ui, sans-serif; color: #f5e9dc; }
+  #game { position: fixed; inset: 0; width: 100%; height: 100%; display: block; cursor: crosshair; }
+  .hidden { display: none !important; }
+
+  /* --- HUD --- */
+  #hud { position: fixed; inset: 0; pointer-events: none; z-index: 5; }
+  #hud-top { position: absolute; top: 14px; left: 50%; transform: translateX(-50%);
+    display: flex; gap: 18px; align-items: center; background: rgba(10,6,4,.62);
+    border: 1px solid rgba(255,179,71,.35); border-radius: 8px; padding: 8px 18px; }
+  #hud-timer { font-size: 26px; font-weight: 800; color: var(--amber); min-width: 76px; text-align: center; }
+  #hud-timer.danger { color: var(--red); }
+  #hud-round, #hud-score, #hud-alive { font-size: 14px; font-weight: 700; letter-spacing: 1px; }
+  #hud-score { color: var(--teal); }
+  #hud-alive { color: #ffb0a0; }
+  #hud-bl { position: absolute; left: 20px; bottom: 18px; }
+  #hud-hp { font-size: 40px; font-weight: 800; line-height: 1; color: #fff; }
+  #hud-hp-bar-wrap { width: 190px; height: 8px; background: rgba(255,255,255,.18);
+    border-radius: 4px; margin-top: 6px; overflow: hidden; }
+  #hud-hp-bar { height: 100%; width: 100%; background: linear-gradient(90deg, #ff7a1a, #ffc46b); }
+  #hud-armor { color: var(--teal); font-weight: 700; margin-left: 8px; }
+  #hud-br { position: absolute; right: 20px; bottom: 18px; text-align: right; }
+  #hud-ammo { font-size: 40px; font-weight: 800; line-height: 1; color: #fff; }
+  #hud-reserve { font-size: 18px; color: #cbb59f; }
+  #hud-weapon { font-size: 13px; letter-spacing: 2px; color: var(--amber); font-weight: 700; }
+  #hud-money { position: absolute; right: 20px; top: 14px; font-size: 20px; font-weight: 800;
+    color: #9dff6b; background: rgba(10,6,4,.62); padding: 6px 12px; border-radius: 8px;
+    border: 1px solid rgba(157,255,107,.3); }
+  #hud-spike { position: absolute; left: 50%; top: 74px; transform: translateX(-50%);
+    font-size: 15px; font-weight: 700; color: var(--amber); text-shadow: 0 1px 4px #000; }
+  #hud-flash { position: absolute; left: 20px; top: 64px; font-size: 13px; font-weight: 700;
+    color: #fff; background: rgba(10,6,4,.55); padding: 4px 10px; border-radius: 6px; }
+  #crosshair { position: absolute; left: 50%; top: 50%; width: 0; height: 0; --gap: 8px; }
+  #crosshair::before, #crosshair::after { content: ''; position: absolute; background: #fff;
+    box-shadow: 0 0 3px #000; }
+  #crosshair::before { left: calc(-1px); top: calc(-14px - var(--gap)); width: 2px; height: 10px; }
+  #crosshair::after { left: calc(-14px - var(--gap)); top: -1px; width: 10px; height: 2px; }
+  #crosshair .dot { position: absolute; left: -2px; top: -2px; width: 4px; height: 4px;
+    background: #fff; border-radius: 50%; box-shadow: 0 0 3px #000; }
+  #crosshair .h, #crosshair .v { position: absolute; background: #fff; box-shadow: 0 0 3px #000; }
+  #crosshair .h { left: var(--gap); top: -1px; width: 10px; height: 2px; }
+  #crosshair .v { left: -1px; top: var(--gap); width: 2px; height: 10px; }
+  #hitmarker { position: absolute; left: 50%; top: 50%; width: 34px; height: 34px;
+    margin: -17px 0 0 -17px; opacity: 0; }
+  #hitmarker.show { animation: hitpop .3s ease-out; }
+  #hitmarker::before, #hitmarker::after { content: ''; position: absolute; inset: 0;
+    background: linear-gradient(45deg, transparent 46%, #fff 46%, #fff 54%, transparent 54%),
+      linear-gradient(-45deg, transparent 46%, #fff 46%, #fff 54%, transparent 54%); }
+  #hitmarker.kill::before, #hitmarker.kill::after { filter: drop-shadow(0 0 4px #ff4a3a); }
+  #hitmarker.head { transform: scale(1.25); }
+  @keyframes hitpop { 0% { opacity: 1; } 100% { opacity: 0; } }
+  #killfeed { position: absolute; right: 20px; top: 64px; text-align: right; font-size: 13px; }
+  .feed-row { background: rgba(10,6,4,.6); padding: 4px 10px; margin-top: 4px; border-radius: 5px;
+    transition: opacity 1s; }
+  .feed-row.fade { opacity: 0; }
+  .feed-row .you { color: var(--teal); }
+  #banner { position: absolute; left: 50%; top: 34%; transform: translate(-50%,-50%) scale(.9);
+    text-align: center; opacity: 0; transition: opacity .25s, transform .25s; }
+  #banner.show { opacity: 1; transform: translate(-50%,-50%) scale(1); }
+  #banner-title { font-size: 54px; font-weight: 900; letter-spacing: 4px; color: var(--amber);
+    text-shadow: 0 3px 18px rgba(0,0,0,.8); }
+  #banner-sub { font-size: 17px; color: #f5e9dc; text-shadow: 0 1px 6px #000; margin-top: 4px; }
+  #plant-bar { position: absolute; left: 50%; bottom: 26%; transform: translateX(-50%);
+    width: 260px; height: 10px; background: rgba(255,255,255,.2); border-radius: 5px;
+    display: none; overflow: hidden; }
+  #plant-bar > div { height: 100%; width: 0; background: var(--amber); }
+  #flash-overlay { position: fixed; inset: 0; background: #fff; opacity: 0; pointer-events: none;
+    transition: opacity .5s; z-index: 8; }
+  #damage-overlay { position: fixed; inset: 0; pointer-events: none; z-index: 6; opacity: 0;
+    box-shadow: inset 0 0 90px 30px rgba(255,30,10,.55); }
+  #damage-overlay.show { opacity: 1; transition: opacity .05s; }
+
+  /* --- Overlays --- */
+  .overlay { position: fixed; inset: 0; z-index: 10; display: flex; align-items: center;
+    justify-content: center; background: rgba(12,7,5,.55); }
+  .panel { background: rgba(16,10,7,.88); border: 1px solid rgba(255,179,71,.45);
+    border-radius: 14px; padding: 30px 36px; max-width: 620px; text-align: center;
+    box-shadow: 0 12px 60px rgba(0,0,0,.7); }
+  .panel h1 { font-size: 46px; letter-spacing: 6px; color: var(--amber); font-weight: 900; }
+  .panel h1 .thin { color: var(--teal); }
+  .panel h2 { font-size: 24px; letter-spacing: 3px; color: var(--amber); }
+  .panel p { margin: 12px 0; font-size: 15px; line-height: 1.55; color: #e8d8c4; }
+  .panel .keys { font-size: 13px; color: #bfae97; line-height: 1.9; }
+  .panel .keys b { color: #fff; background: rgba(255,255,255,.12); padding: 1px 7px;
+    border-radius: 4px; margin: 0 2px; }
+  .big-btn { pointer-events: auto; cursor: pointer; margin-top: 18px; font-size: 18px;
+    font-weight: 800; letter-spacing: 2px; color: #1a0f08; background: linear-gradient(180deg, #ffc46b, #ff7a1a);
+    border: none; border-radius: 10px; padding: 14px 34px; }
+  .big-btn:hover { filter: brightness(1.1); }
+  .big-btn:disabled { opacity: .45; cursor: default; }
+  #buy-list { text-align: left; margin-top: 14px; }
+  .buy-row { pointer-events: auto; display: flex; width: 100%; gap: 12px; align-items: baseline;
+    background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.12); color: #f5e9dc;
+    border-radius: 8px; padding: 10px 14px; margin-top: 8px; cursor: pointer; font-size: 15px; }
+  .buy-row:hover:not(:disabled) { border-color: var(--amber); background: rgba(255,179,71,.12); }
+  .buy-row:disabled { opacity: .45; cursor: default; }
+  .buy-name { font-weight: 800; }
+  .buy-note { flex: 1; color: #bfae97; font-size: 13px; }
+  .buy-price { color: #9dff6b; font-weight: 800; }
+  #buy-money { color: #9dff6b; font-weight: 800; font-size: 19px; }
+  #end-title.win { color: #9dff6b; }
+  #end-title.lose { color: var(--red); }
+</style>
+<script type="importmap">
+{ "imports": { "three": "./vendor/three/three.module.min.js" } }
+</script>
+</head>
+<body>
+<canvas id="game"></canvas>
+
+<div id="hud">
+  <div id="hud-top">
+    <span id="hud-round">ROUND 1</span>
+    <span id="hud-timer">1:40</span>
+    <span id="hud-score">0 — 0</span>
+    <span id="hud-alive">JACKALS LEFT: 4</span>
+  </div>
+  <div id="hud-money">$800</div>
+  <div id="hud-spike"></div>
+  <div id="hud-flash"></div>
+  <div id="killfeed"></div>
+  <div id="hud-bl">
+    <span id="hud-hp">150</span><span id="hud-armor"></span>
+    <div id="hud-hp-bar-wrap"><div id="hud-hp-bar"></div></div>
+  </div>
+  <div id="hud-br">
+    <div><span id="hud-ammo">12</span> <span id="hud-reserve">/ 48</span></div>
+    <div id="hud-weapon">P9</div>
+  </div>
+  <div id="crosshair"><span class="dot"></span><span class="h"></span><span class="v"></span></div>
+  <div id="hitmarker"></div>
+  <div id="banner"><div id="banner-title"></div><div id="banner-sub"></div></div>
+  <div id="plant-bar"><div></div></div>
+</div>
+<div id="flash-overlay"></div>
+<div id="damage-overlay"></div>
+
+<div id="overlay-start" class="overlay">
+  <div class="panel">
+    <h1>EMBER<span class="thin">LINE</span></h1>
+    <p><b>Dustline Yard — Reactor Site.</b> You are Vanguard, alone against four
+    Jackals. Carry the Spike to the Reactor, plant it, and hold — or eliminate
+    the whole squad. First to 5 rounds takes the match.</p>
+    <p class="keys">
+      <b>W A S D</b> move &nbsp; <b>Mouse</b> aim &nbsp; <b>Click</b> fire<br>
+      <b>R</b> reload &nbsp; <b>1 / 2</b> weapons &nbsp; <b>G</b> flash grenade<br>
+      <b>Ctrl / C</b> crouch — steadier aim &nbsp; <b>E</b> hold to plant the Spike<br>
+      <b>B</b> buy menu between rounds
+    </p>
+    <p>Headshots deal double damage. Stop moving to tighten your spread.
+    Kills pay $300, a round win $325 — spend it in the buy menu.</p>
+    <button id="start-btn" class="big-btn">CLICK TO DEPLOY</button>
+  </div>
+</div>
+
+<div id="overlay-buy" class="overlay hidden">
+  <div class="panel">
+    <h2>BUY PHASE</h2>
+    <p>Money: <span id="buy-money">$800</span> — spend it before the round starts.</p>
+    <div id="buy-list"></div>
+    <button id="buy-deploy" class="big-btn">DEPLOY ▸</button>
+  </div>
+</div>
+
+<div id="overlay-end" class="overlay hidden">
+  <div class="panel">
+    <h1 id="end-title">MATCH WON</h1>
+    <p id="end-sub"></p>
+    <button id="restart-btn" class="big-btn">PLAY AGAIN</button>
+  </div>
+</div>
+
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>
